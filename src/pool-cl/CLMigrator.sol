@@ -14,10 +14,14 @@ import {ICLPositionManager} from "./interfaces/ICLPositionManager.sol";
 import {Actions} from "../libraries/Actions.sol";
 import {Plan, Planner} from "../libraries/Planner.sol";
 import {ReentrancyLock} from "../base/ReentrancyLock.sol";
+import {console} from "forge-std/console.sol";
 
 contract CLMigrator is ICLMigrator, BaseMigrator, ReentrancyLock {
     ICLPositionManager public immutable clPositionManager;
     ICLPoolManager public immutable clPoolManager;
+
+    uint256 public latestAmount1Consumed;
+    uint256 public latestAmount1In;
 
     constructor(address _WETH9, address _clPositionManager, IAllowanceTransfer _permit2)
         BaseMigrator(_WETH9, _clPositionManager, _permit2)
@@ -58,6 +62,15 @@ contract CLMigrator is ICLMigrator, BaseMigrator, ReentrancyLock {
         });
         (uint256 amount0Consumed, uint256 amount1Consumed) =
             _addLiquidityToTargetPool(mintParams, infiPoolParams.deadline);
+
+        // log the amount0In, amount1In, amount0Consumed, amount1Consumed
+        console.log("amount0In:", amount0In);
+        console.log("amount1In:", amount1In);
+        console.log("amount0Consumed:", amount0Consumed);
+        console.log("amount1Consumed:", amount1Consumed);
+
+        latestAmount1Consumed = amount1Consumed;
+        latestAmount1In = amount1In;
 
         // refund if necessary, ETH is supported by CurrencyLib
         unchecked {

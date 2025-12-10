@@ -833,6 +833,78 @@ abstract contract CLMigratorFromV2 is OldVersionHelper, PosmTestSetup, Permit2Ap
         assertApproxEqAbs(token1.balanceOf(address(vault)), 5 ether, 0.000001 ether);
     }
 
+    function test_verify_amount1Consumed_bug() public {
+        // 1. mint some liquidity to the v2 pair
+        _mintV2Liquidity(v2PairWithoutNativeToken, 10 ether, 5 ether);
+        uint256 lpTokenBefore = v2PairWithoutNativeToken.balanceOf(address(this));
+        assertGt(lpTokenBefore, 0);
+
+        // 2. make sure migrator can transfer user's v2 lp token
+
+        permit2ApproveWithSpecificAllowance(
+            address(this),
+            permit2,
+            address(v2PairWithoutNativeToken),
+            address(migrator),
+            lpTokenBefore,
+            uint160(lpTokenBefore)
+        );
+
+        // 3. initialize the pool
+        uint160 initSqrtPrice = 79228162514264337593543950336; // tick is 0
+        migrator.initializePool(poolKeyWithoutNativeToken, initSqrtPrice);
+
+        IBaseMigrator.V2PoolParams memory v2PoolParams = IBaseMigrator.V2PoolParams({
+            pair: address(v2PairWithoutNativeToken),
+            migrateAmount: lpTokenBefore,
+            // the order of token0 and token1 respect to the pair
+            // but may mismatch the order of infinity pool key when WETH is invovled
+            amount0Min: 9.999 ether,
+            amount1Min: 4.999 ether
+        });
+
+        // mint position which is out of range and tickUpper is smaller than 0
+        ICLMigrator.InfiCLPoolParams memory infiMintParams = ICLMigrator.InfiCLPoolParams({
+            poolKey: poolKeyWithoutNativeToken,
+            tickLower: -200,
+            tickUpper: -100,
+            liquidityMin: 0,
+            recipient: address(this),
+            deadline: block.timestamp + 100,
+            hookData: new bytes(0)
+        });
+
+        uint256 balance0Before = token0.balanceOf(address(this));
+        uint256 balance1Before = token1.balanceOf(address(this));
+
+        // 4. migrate from v2 to infinity
+        migrator.migrateFromV2(v2PoolParams, infiMintParams, 0, 0);
+
+        uint256 latestAmount1Consumed = migrator.latestAmount1Consumed();
+        uint256 latestAmount1In = migrator.latestAmount1In();
+        // bug: amount1Consumed is larger than amount1In
+        // but it will not fail the tx, because will not refund when amount1Consumed > amount1In
+        assertGt(latestAmount1Consumed, latestAmount1In);
+        assertEq(latestAmount1In, 4999999999999999292);
+        assertEq(latestAmount1Consumed, 10025061348115254598);
+
+        // necessary checks
+        // refund almost 10 ether of token0 , becasue do not use token1 when adding position which is out of range
+        assertApproxEqAbs(token0.balanceOf(address(this)) - balance0Before, 10 ether, 0.000001 ether);
+        // no token1 refunded, because all token1 is used when adding position which is out of range
+        assertEq(balance1Before - token1.balanceOf(address(this)), 0 ether);
+
+        // v2 pair should be burned already
+        assertEq(v2PairWithoutNativeToken.balanceOf(address(this)), 0);
+
+        // make sure liuqidty is minted to the correct pool
+        assertEq(lpm.ownerOf(1), address(this));
+        uint128 liquidity = lpm.getPositionLiquidity(1);
+
+        assertEq(token0.balanceOf(address(vault)), 0);
+        assertApproxEqAbs(token1.balanceOf(address(vault)), 5 ether, 0.000001 ether);
+    }
+
     function testCLMigrateFromV2ThroughOffchainSign() public {
         // 1. mint some liquidity to the v2 pair
         _mintV2Liquidity(v2Pair);

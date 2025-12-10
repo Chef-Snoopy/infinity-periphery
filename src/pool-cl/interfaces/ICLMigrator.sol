@@ -32,6 +32,12 @@ interface ICLMigrator is IBaseMigrator {
         bytes hookData;
     }
 
+    // uint256 public latestAmount1Consumed;
+    function latestAmount1Consumed() external view returns (uint256);
+    // uint256 public latestAmount1In;
+    function latestAmount1In() external view returns (uint256);
+     
+
     /// @notice Migrate liquidity from v2 to infinity
     /// @param v2PoolParams ncessary info for removing liqudity the source v2 pool
     /// @param infiPoolParams necessary info for adding liquidity the target infinity cl-pool
