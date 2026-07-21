@@ -11,6 +11,5 @@
   "binPositionManager": "0x",
   "clQuoter:": "0x",
   "binQuoter": "0x",
-  "clTickLens": "0x",
-  "binPositionManagerHelper": "0x"
+  "clTickLens": "0x"
 }

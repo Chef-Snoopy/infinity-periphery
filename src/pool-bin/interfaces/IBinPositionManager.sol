@@ -11,6 +11,7 @@ interface IBinPositionManager is IPositionManager {
     error IdOverflows(int256);
     error IdSlippageCaught(uint256 activeIdDesired, uint256 idSlippage, uint24 activeId);
     error AddLiquidityInputActiveIdMismatch();
+    error LiquiditySlippageCaught(uint24 binId, uint256 minLiquidity, uint256 liquidityMinted);
 
     /// @notice BinAddLiquidityParams
     /// - amount0: Amount to send for token0
@@ -22,6 +23,7 @@ interface IBinPositionManager is IPositionManager {
     /// - deltaIds: List of delta ids to add liquidity (`deltaId = activeId - desiredId`)
     /// - distributionX: Distribution of tokenX with sum(distributionX) = 1e18 (100%) or 0 (0%)
     /// - distributionY: Distribution of tokenY with sum(distributionY) = 1e18 (100%) or 0 (0%)
+    /// - minLiquidities: Min amount of share minted for each bin (aligned with deltaIds), pass 0 to skip check for a bin
     /// - to: Address of recipient
     /// - hookData: Data to pass to the hook
     struct BinAddLiquidityParams {
@@ -35,6 +37,7 @@ interface IBinPositionManager is IPositionManager {
         int256[] deltaIds;
         uint256[] distributionX;
         uint256[] distributionY;
+        uint256[] minLiquidities;
         address to;
         bytes hookData;
     }
@@ -64,6 +67,7 @@ interface IBinPositionManager is IPositionManager {
     /// - deltaIds: List of delta ids to add liquidity (`deltaId = activeId - desiredId`)
     /// - distributionX: Distribution of tokenX with sum(distributionX) = 1e18 (100%) or 0 (0%)
     /// - distributionY: Distribution of tokenY with sum(distributionY) = 1e18 (100%) or 0 (0%)
+    /// - minLiquidities: Min amount of share minted for each bin (aligned with deltaIds), pass 0 to skip check for a bin
     /// - to: Address of recipient
     /// - hookData: Data to pass to the hook
     struct BinAddLiquidityFromDeltasParams {
@@ -75,6 +79,7 @@ interface IBinPositionManager is IPositionManager {
         int256[] deltaIds;
         uint256[] distributionX;
         uint256[] distributionY;
+        uint256[] minLiquidities;
         address to;
         bytes hookData;
     }
