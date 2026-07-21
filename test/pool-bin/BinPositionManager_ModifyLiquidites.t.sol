@@ -251,6 +251,70 @@ contract BinPositionManager_ModifyLiquidityTest is BinLiquidityHelper, TokenFixt
         binPm.modifyLiquidities(payload, _deadline);
     }
 
+    function test_addLiquidity_minLiquiditiesLengthMismatch() public {
+        uint24[] memory binIds = getBinIds(activeId, 3);
+        IBinPositionManager.BinAddLiquidityParams memory param =
+            _getAddParams(key1, binIds, 1 ether, 1 ether, activeId, alice);
+        param.minLiquidities = new uint256[](2);
+
+        bytes memory payload = Planner.init().add(Actions.BIN_ADD_LIQUIDITY, abi.encode(param)).encode();
+        vm.expectRevert(BaseActionsRouter.InputLengthMismatch.selector);
+        binPm.modifyLiquidities(payload, _deadline);
+    }
+
+    function test_addLiquidity_LiquiditySlippageCaught() public {
+        uint24[] memory binIds = getBinIds(activeId, 3);
+        IBinPositionManager.BinAddLiquidityParams memory param =
+            _getAddParams(key1, binIds, 1 ether, 1 ether, activeId, alice);
+
+        // expected share minted for bin[0] (activeId - 1): (0 ether, 0.5 ether)
+        bytes32 binReserves = PackedUint128Math.encode(0, 0); // binReserve=0 for new pool
+        uint256 expectedLiquidity =
+            calculateLiquidityMinted(binReserves, 0 ether, 0.5 ether, binIds[0], 10, 0) - BinPool.MINIMUM_SHARE;
+
+        // set min 1 wei above what will be minted
+        uint256[] memory minLiquidities = new uint256[](3);
+        minLiquidities[0] = expectedLiquidity + 1;
+        param.minLiquidities = minLiquidities;
+
+        bytes memory payload = Planner.init().add(Actions.BIN_ADD_LIQUIDITY, abi.encode(param)).encode();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBinPositionManager.LiquiditySlippageCaught.selector,
+                binIds[0],
+                expectedLiquidity + 1,
+                expectedLiquidity
+            )
+        );
+        binPm.modifyLiquidities(payload, _deadline);
+    }
+
+    function test_addLiquidity_minLiquidities_exactAmount() public {
+        uint24[] memory binIds = getBinIds(activeId, 3);
+        IBinPositionManager.BinAddLiquidityParams memory param =
+            _getAddParams(key1, binIds, 1 ether, 1 ether, activeId, alice);
+
+        // set min to the exact share minted for each bin, txn should pass
+        bytes32 binReserves = PackedUint128Math.encode(0, 0); // binReserve=0 for new pool
+        uint256[] memory minLiquidities = new uint256[](3);
+        minLiquidities[0] =
+            calculateLiquidityMinted(binReserves, 0 ether, 0.5 ether, binIds[0], 10, 0) - BinPool.MINIMUM_SHARE;
+        minLiquidities[1] =
+            calculateLiquidityMinted(binReserves, 0.5 ether, 0.5 ether, binIds[1], 10, 0) - BinPool.MINIMUM_SHARE;
+        minLiquidities[2] =
+            calculateLiquidityMinted(binReserves, 0.5 ether, 0 ether, binIds[2], 10, 0) - BinPool.MINIMUM_SHARE;
+        param.minLiquidities = minLiquidities;
+
+        Plan memory planner = Planner.init().add(Actions.BIN_ADD_LIQUIDITY, abi.encode(param));
+        bytes memory payload = planner.finalizeModifyLiquidityWithClose(key1);
+        binPm.modifyLiquidities(payload, _deadline);
+
+        // verify liquidity minted to alice
+        for (uint256 i; i < binIds.length; i++) {
+            assertEq(binPm.balanceOf(alice, key1.toId().toTokenId(binIds[i])), minLiquidities[i]);
+        }
+    }
+
     function test_addLiquidity_SingleBin() public {
         uint24[] memory binIds = getBinIds(activeId, 1);
         IBinPositionManager.BinAddLiquidityParams memory param =
@@ -917,6 +981,7 @@ contract BinPositionManager_ModifyLiquidityTest is BinLiquidityHelper, TokenFixt
                 deltaIds: _param.deltaIds,
                 distributionX: _param.distributionX,
                 distributionY: _param.distributionY,
+                minLiquidities: _param.minLiquidities,
                 to: _param.to,
                 hookData: _param.hookData
             });
@@ -966,6 +1031,7 @@ contract BinPositionManager_ModifyLiquidityTest is BinLiquidityHelper, TokenFixt
                 deltaIds: _param.deltaIds,
                 distributionX: _param.distributionX,
                 distributionY: _param.distributionY,
+                minLiquidities: _param.minLiquidities,
                 to: _param.to,
                 hookData: _param.hookData
             });
@@ -991,6 +1057,54 @@ contract BinPositionManager_ModifyLiquidityTest is BinLiquidityHelper, TokenFixt
         // make sure expected amount was transferred
         assertEq(currency0TokenBefore - currency0TokenAfter, amountToSend);
         assertEq(currency1TokenBefore - currency1TokenAfter, amountToSend);
+    }
+
+    function test_addLiquidityFromDeltas_LiquiditySlippageCaught() public {
+        uint256 amountToSend = 1000e18;
+
+        Plan memory planner = Planner.init();
+        planner.add(Actions.SETTLE, abi.encode(key1.currency0, amountToSend, true));
+        planner.add(Actions.SETTLE, abi.encode(key1.currency1, amountToSend, true));
+
+        uint24[] memory binIds = getBinIds(activeId, 1);
+        IBinPositionManager.BinAddLiquidityParams memory _param =
+            _getAddParams(key1, binIds, uint128(amountToSend), uint128(amountToSend), activeId, address(this));
+
+        // expected share minted for the active bin, set min 1 wei above it
+        bytes32 binReserves = PackedUint128Math.encode(0, 0); // binReserve=0 for new pool
+        uint256 expectedLiquidity =
+            calculateLiquidityMinted(binReserves, uint128(amountToSend), uint128(amountToSend), binIds[0], 10, 0)
+                - BinPool.MINIMUM_SHARE;
+        uint256[] memory minLiquidities = new uint256[](1);
+        minLiquidities[0] = expectedLiquidity + 1;
+
+        IBinPositionManager.BinAddLiquidityFromDeltasParams memory param =
+            IBinPositionManager.BinAddLiquidityFromDeltasParams({
+                poolKey: _param.poolKey,
+                amount0Max: _param.amount0Max,
+                amount1Max: _param.amount1Max,
+                activeIdDesired: _param.activeIdDesired,
+                idSlippage: _param.idSlippage,
+                deltaIds: _param.deltaIds,
+                distributionX: _param.distributionX,
+                distributionY: _param.distributionY,
+                minLiquidities: minLiquidities,
+                to: _param.to,
+                hookData: _param.hookData
+            });
+        planner.add(Actions.BIN_ADD_LIQUIDITY_FROM_DELTAS, abi.encode(param));
+
+        bytes memory plan = planner.encode();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBinPositionManager.LiquiditySlippageCaught.selector,
+                binIds[0],
+                expectedLiquidity + 1,
+                expectedLiquidity
+            )
+        );
+        binPm.modifyLiquidities(plan, _deadline);
     }
 
     function testFuzz_addLiquidityFromDeltas_fot(uint256 bips, uint256 amount0, uint256 amount1) public {
@@ -1033,6 +1147,7 @@ contract BinPositionManager_ModifyLiquidityTest is BinLiquidityHelper, TokenFixt
                 deltaIds: _param.deltaIds,
                 distributionX: _param.distributionX,
                 distributionY: _param.distributionY,
+                minLiquidities: _param.minLiquidities,
                 to: _param.to,
                 hookData: _param.hookData
             });

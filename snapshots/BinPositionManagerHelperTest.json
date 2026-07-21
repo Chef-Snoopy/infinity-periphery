@@ -1,8 +1,8 @@
 {
-  "BinPositionManagerHelper size": "8702",
-  "test_addLiquidities_existingPool": "1049529",
-  "test_addLiquidities_existingPool_bobReceiver": "1049529",
-  "test_addLiquidities_existingPool_nativeToken": "955490",
-  "test_addLiquidities_newPool": "1176746",
-  "test_addLiquidities_newPool_WithPermit": "1247500"
+  "BinPositionManagerHelper size": "8750",
+  "test_addLiquidities_existingPool": "1051656",
+  "test_addLiquidities_existingPool_bobReceiver": "1051656",
+  "test_addLiquidities_existingPool_nativeToken": "957606",
+  "test_addLiquidities_newPool": "1178904",
+  "test_addLiquidities_newPool_WithPermit": "1249658"
 }

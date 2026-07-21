@@ -37,6 +37,7 @@ contract BinCalldataDecoderTest is Test {
         _assertEq(addLiquidityParams.deltaIds, _addLiquidityParams.deltaIds);
         _assertEq(addLiquidityParams.distributionX, _addLiquidityParams.distributionX);
         _assertEq(addLiquidityParams.distributionY, _addLiquidityParams.distributionY);
+        _assertEq(addLiquidityParams.minLiquidities, _addLiquidityParams.minLiquidities);
         assertEq(addLiquidityParams.to, _addLiquidityParams.to);
     }
 
@@ -70,6 +71,7 @@ contract BinCalldataDecoderTest is Test {
         _assertEq(addLiquidityParams.deltaIds, _addLiquidityParams.deltaIds);
         _assertEq(addLiquidityParams.distributionX, _addLiquidityParams.distributionX);
         _assertEq(addLiquidityParams.distributionY, _addLiquidityParams.distributionY);
+        _assertEq(addLiquidityParams.minLiquidities, _addLiquidityParams.minLiquidities);
         assertEq(addLiquidityParams.to, _addLiquidityParams.to);
     }
 
