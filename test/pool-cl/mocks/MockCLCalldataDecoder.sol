@@ -3,22 +3,11 @@ pragma solidity ^0.8.24;
 
 import {CLCalldataDecoder} from "../../../src/pool-cl/libraries/CLCalldataDecoder.sol";
 import {IInfinityRouter} from "../../../src/interfaces/IInfinityRouter.sol";
-import {Currency} from "infinity-core/src/types/Currency.sol";
 import {PoolKey} from "infinity-core/src/types/PoolKey.sol";
 
 // we need to use a mock contract to make the calls happen in calldata not memory
 contract MockCLCalldataDecoder {
     using CLCalldataDecoder for bytes;
-
-    struct CLMintFromDeltasParams {
-        PoolKey poolKey;
-        int24 tickLower;
-        int24 tickUpper;
-        uint128 amount0Max;
-        uint128 amount1Max;
-        address owner;
-        bytes hookData;
-    }
 
     function decodeCLModifyLiquidityParams(bytes calldata params)
         external
@@ -85,36 +74,4 @@ contract MockCLCalldataDecoder {
         return params.decodeCLMintParams();
     }
 
-    function decodeIncreaseLiquidityFromDeltasParams(bytes calldata params)
-        external
-        pure
-        returns (uint256 tokenId, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData)
-    {
-        return params.decodeCLIncreaseLiquidityFromDeltasParams();
-    }
-
-    function decodeCLMintFromDeltasParams(bytes calldata params)
-        external
-        pure
-        returns (CLMintFromDeltasParams memory mintParams)
-    {
-        (
-            PoolKey memory poolKey,
-            int24 tickLower,
-            int24 tickUpper,
-            uint128 amount0Max,
-            uint128 amount1Max,
-            address owner,
-            bytes memory hookData
-        ) = params.decodeCLMintFromDeltasParams();
-        return CLMintFromDeltasParams({
-            poolKey: poolKey,
-            tickLower: tickLower,
-            tickUpper: tickUpper,
-            amount0Max: amount0Max,
-            amount1Max: amount1Max,
-            owner: owner,
-            hookData: hookData
-        });
-    }
 }

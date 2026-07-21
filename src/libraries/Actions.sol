@@ -12,8 +12,8 @@ library Actions {
     uint256 internal constant CL_DECREASE_LIQUIDITY = 0x01;
     uint256 internal constant CL_MINT_POSITION = 0x02;
     uint256 internal constant CL_BURN_POSITION = 0x03;
-    uint256 internal constant CL_INCREASE_LIQUIDITY_FROM_DELTAS = 0x04;
-    uint256 internal constant CL_MINT_POSITION_FROM_DELTAS = 0x05;
+    // 0x04 (CL_INCREASE_LIQUIDITY_FROM_DELTAS) and 0x05 (CL_MINT_POSITION_FROM_DELTAS) were removed
+    // due to insufficient slippage protection, subsequent action values are kept unchanged
 
     // swapping
     uint256 internal constant CL_SWAP_EXACT_IN_SINGLE = 0x06;
