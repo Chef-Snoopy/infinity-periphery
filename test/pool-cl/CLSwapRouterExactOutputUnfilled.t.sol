@@ -101,7 +101,10 @@ contract CLSwapRouterExactOutputUnfilledTest is TokenFixture, Test {
         plan = plan.add(Actions.CL_SWAP_EXACT_OUT_SINGLE, abi.encode(params));
         bytes memory data = plan.finalizeSwap(currency0, currency1, ActionConstants.MSG_SENDER);
 
-        vm.expectPartialRevert(IInfinityRouter.ExactOutputUnfilled.selector);
+        // the realized output is the pool's whole currency1 depth, ~5.02 ether
+        vm.expectRevert(
+            abi.encodeWithSelector(IInfinityRouter.ExactOutputUnfilled.selector, 10 ether, 5021655822772834910)
+        );
         router.executeActions(data);
     }
 
@@ -113,7 +116,10 @@ contract CLSwapRouterExactOutputUnfilledTest is TokenFixture, Test {
         plan = plan.add(Actions.CL_SWAP_EXACT_OUT_SINGLE, abi.encode(params));
         bytes memory data = plan.finalizeSwap(currency1, currency0, ActionConstants.MSG_SENDER);
 
-        vm.expectPartialRevert(IInfinityRouter.ExactOutputUnfilled.selector);
+        // the realized output is the pool's whole currency0 depth, ~0.0497 ether
+        vm.expectRevert(
+            abi.encodeWithSelector(IInfinityRouter.ExactOutputUnfilled.selector, 1 ether, 49775942348678953)
+        );
         router.executeActions(data);
     }
 
@@ -129,7 +135,9 @@ contract CLSwapRouterExactOutputUnfilledTest is TokenFixture, Test {
         plan = plan.add(Actions.CL_SWAP_EXACT_OUT, abi.encode(params));
         bytes memory data = plan.finalizeSwap(currency2, currency0, ActionConstants.MSG_SENDER);
 
-        vm.expectPartialRevert(IInfinityRouter.ExactOutputUnfilled.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(IInfinityRouter.ExactOutputUnfilled.selector, 1 ether, 49775942348678953)
+        );
         router.executeActions(data);
     }
 
@@ -151,7 +159,13 @@ contract CLSwapRouterExactOutputUnfilledTest is TokenFixture, Test {
         plan = plan.add(Actions.CL_SWAP_EXACT_OUT, abi.encode(params));
         bytes memory data = plan.finalizeSwap(currency1, currency2, ActionConstants.MSG_SENDER);
 
-        vm.expectPartialRevert(IInfinityRouter.ExactOutputUnfilled.selector);
+        // the MIDDLE hop is the one that reverts: it was asked for the 10.031 ether of currency1 that the
+        // last hop consumed, and the thin pool can only deliver ~5.02
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IInfinityRouter.ExactOutputUnfilled.selector, 10031093380150452359, 5021655822772834910
+            )
+        );
         router.executeActions(data);
     }
 
@@ -175,6 +189,37 @@ contract CLSwapRouterExactOutputUnfilledTest is TokenFixture, Test {
         );
         assertEq(IERC20(Currency.unwrap(currency0)).balanceOf(address(router)), 0, "no input residual");
         assertEq(IERC20(Currency.unwrap(currency1)).balanceOf(address(router)), 0, "no output residual");
+    }
+
+    /// @notice currency2 -> currency1 -> currency0 for an amount both pools can fill. Both hops run
+    ///         oneForZero, which is the direction the pre-existing multi-hop exactOutput tests never
+    ///         exercise, so this pins down the input/output side selection for that branch.
+    function test_exactOutput_multiHop_oneForZero_fullFillSucceeds() public {
+        uint256 amountOut = 0.01 ether;
+        uint256 inputBefore = IERC20(Currency.unwrap(currency2)).balanceOf(address(this));
+        uint256 outputBefore = IERC20(Currency.unwrap(currency0)).balanceOf(address(this));
+
+        PathKey[] memory path = new PathKey[](2);
+        path[0] = _pathKey(currency2);
+        path[1] = _pathKey(currency1);
+
+        ICLRouterBase.CLSwapExactOutputParams memory params =
+            ICLRouterBase.CLSwapExactOutputParams(currency0, path, uint128(amountOut), type(uint128).max);
+
+        plan = plan.add(Actions.CL_SWAP_EXACT_OUT, abi.encode(params));
+        bytes memory data = plan.finalizeSwap(currency2, currency0, ActionConstants.MSG_SENDER);
+        router.executeActions(data);
+
+        uint256 paid = inputBefore - IERC20(Currency.unwrap(currency2)).balanceOf(address(this));
+        assertEq(
+            IERC20(Currency.unwrap(currency0)).balanceOf(address(this)) - outputBefore,
+            amountOut,
+            "exact output delivered in full"
+        );
+        assertEq(paid, 1006047259623890093);
+        assertEq(IERC20(Currency.unwrap(currency0)).balanceOf(address(router)), 0, "no output residual");
+        assertEq(IERC20(Currency.unwrap(currency1)).balanceOf(address(router)), 0, "no intermediate residual");
+        assertEq(IERC20(Currency.unwrap(currency2)).balanceOf(address(router)), 0, "no input residual");
     }
 
     function _pathKey(Currency intermediateCurrency) internal view returns (PathKey memory) {
