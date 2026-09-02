@@ -31,7 +31,8 @@ abstract contract CLRouterBase is ICLRouterBase, DeltaResolver {
         }
         uint128 amountOut = _swapExactPrivate(
                 params.poolKey, params.zeroForOne, -int256(uint256(amountIn)), params.hookData
-            ).toUint128();
+            )
+            .toUint128();
         if (amountOut < params.amountOutMinimum) {
             revert IInfinityRouter.TooLittleReceived(params.amountOutMinimum, amountOut);
         }
@@ -97,9 +98,11 @@ abstract contract CLRouterBase is ICLRouterBase, DeltaResolver {
                 (PoolKey memory poolKey, bool oneForZero) = pathKey.getPoolAndSwapDirection(currencyOut);
                 // The output delta will always be negative, except for when interacting with certain hook pools
                 amountIn = (uint256(
-                        -int256(_swapExactPrivate(poolKey, !oneForZero, int256(uint256(amountOut)), pathKey.hookData))
-                    ))
-                .toUint128();
+                            -int256(
+                                _swapExactPrivate(poolKey, !oneForZero, int256(uint256(amountOut)), pathKey.hookData)
+                            )
+                        ))
+                    .toUint128();
 
                 amountOut = amountIn;
                 currencyOut = pathKey.intermediateCurrency;

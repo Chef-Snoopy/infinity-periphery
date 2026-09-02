@@ -46,6 +46,7 @@ contract BinPositionManager is
 {
     using CalldataDecoder for bytes;
     using PackedUint128Math for uint128;
+    using PackedUint128Math for bytes32;
     using BinCalldataDecoder for bytes;
     using BinTokenLibrary for PoolId;
     using BinPoolParametersHelper for bytes32;
@@ -134,15 +135,14 @@ contract BinPositionManager is
                     params.decodeBinAddLiquidityParams();
                 _addLiquidity(
                     liquidityParams.poolKey,
-                    liquidityParams.amount0,
-                    liquidityParams.amount1,
-                    liquidityParams.amount0Max,
-                    liquidityParams.amount1Max,
+                    liquidityParams.amount0.encode(liquidityParams.amount1),
+                    liquidityParams.amount0Max.encode(liquidityParams.amount1Max),
                     liquidityParams.activeIdDesired,
                     liquidityParams.idSlippage,
                     liquidityParams.deltaIds,
                     liquidityParams.distributionX,
                     liquidityParams.distributionY,
+                    liquidityParams.minLiquidities,
                     liquidityParams.to,
                     liquidityParams.hookData
                 );
@@ -152,15 +152,16 @@ contract BinPositionManager is
                     params.decodeBinAddLiquidityFromDeltasParams();
                 _addLiquidity(
                     liquidityParams.poolKey,
-                    _getFullCredit(liquidityParams.poolKey.currency0).toUint128(),
-                    _getFullCredit(liquidityParams.poolKey.currency1).toUint128(),
-                    liquidityParams.amount0Max,
-                    liquidityParams.amount1Max,
+                    _getFullCredit(liquidityParams.poolKey.currency0)
+                        .toUint128()
+                        .encode(_getFullCredit(liquidityParams.poolKey.currency1).toUint128()),
+                    liquidityParams.amount0Max.encode(liquidityParams.amount1Max),
                     liquidityParams.activeIdDesired,
                     liquidityParams.idSlippage,
                     liquidityParams.deltaIds,
                     liquidityParams.distributionX,
                     liquidityParams.distributionY,
+                    liquidityParams.minLiquidities,
                     liquidityParams.to,
                     liquidityParams.hookData
                 );
@@ -222,26 +223,28 @@ contract BinPositionManager is
         }
     }
 
+    /// @param amountIn packed (amount0, amount1) to add, see PackedUint128Math
+    /// @param amountsMax packed (amount0Max, amount1Max) slippage cap on token input, see PackedUint128Math
     function _addLiquidity(
         PoolKey calldata poolKey,
-        uint128 amount0,
-        uint128 amount1,
-        uint128 amount0Max,
-        uint128 amount1Max,
+        bytes32 amountIn,
+        bytes32 amountsMax,
         uint256 activeIdDesired,
         uint256 idSlippage,
         int256[] calldata deltaIds,
         uint256[] calldata distributionX,
         uint256[] calldata distributionY,
+        uint256[] calldata minLiquidities,
         address to,
         bytes calldata hookData
     ) internal {
         uint256 deltaLen = deltaIds.length;
         uint256 lenX = distributionX.length;
         uint256 lenY = distributionY.length;
+        uint256 lenMin = minLiquidities.length;
         assembly ("memory-safe") {
-            /// @dev revert if deltaLen != lenX || deltaLen != lenY
-            if iszero(and(eq(deltaLen, lenX), eq(deltaLen, lenY))) {
+            /// @dev revert if deltaLen != lenX || deltaLen != lenY || deltaLen != lenMin
+            if iszero(and(and(eq(deltaLen, lenX), eq(deltaLen, lenY)), eq(deltaLen, lenMin))) {
                 mstore(0, 0xaaad13f7) // selector InputLengthMismatch
                 revert(0x1c, 0x04)
             }
@@ -271,7 +274,6 @@ contract BinPositionManager is
             );
         }
 
-        bytes32 amountIn = amount0.encode(amount1);
         (BalanceDelta delta, BinPool.MintArrays memory mintArray) = binPoolManager.mint(
             poolKey,
             IBinPoolManager.MintParams({liquidityConfigs: liquidityConfigs, amountIn: amountIn, salt: bytes32(0)}),
@@ -280,12 +282,22 @@ contract BinPositionManager is
 
         /// Slippage checks, similar to CL type. However, this is different from TJ. In PCS infinity,
         /// as hooks can impact delta (take extra token), user need to be protected with amountMax instead
+        (uint128 amount0Max, uint128 amount1Max) = amountsMax.decode();
         delta.validateMaxIn(amount0Max, amount1Max);
 
         // mint
         PoolId poolId = cachePoolKey(poolKey);
         uint256[] memory tokenIds = new uint256[](mintArray.ids.length);
         for (uint256 i; i < mintArray.ids.length; i++) {
+            /// @dev Slippage check on the shares minted per bin. amountMax only bounds the token input, it cannot
+            //       catch active bin composition manipulation (eg. sandwich) which dilutes the shares minted.
+            //       mintArray is aligned with liquidityConfigs, hence with deltaIds/minLiquidities.
+            if (mintArray.liquidityMinted[i] < minLiquidities[i]) {
+                revert LiquiditySlippageCaught(
+                    uint24(mintArray.ids[i]), minLiquidities[i], mintArray.liquidityMinted[i]
+                );
+            }
+
             uint256 tokenId = poolId.toTokenId(mintArray.ids[i]);
             _mint(to, tokenId, mintArray.liquidityMinted[i]);
 

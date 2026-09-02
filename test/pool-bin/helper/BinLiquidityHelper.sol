@@ -145,6 +145,7 @@ contract BinLiquidityHelper is Test {
             deltaIds: convertToRelative(binIds, activeId),
             distributionX: distribX,
             distributionY: distribY,
+            minLiquidities: new uint256[](totalBins), // default 0, replace param.minLiquidities if needed after calling this func
             to: recipient,
             hookData: new bytes(0) // replace param.hookData if needed after calling this func
         });
