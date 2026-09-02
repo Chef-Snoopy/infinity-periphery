@@ -152,9 +152,9 @@ contract BinPositionManager is
                     params.decodeBinAddLiquidityFromDeltasParams();
                 _addLiquidity(
                     liquidityParams.poolKey,
-                    _getFullCredit(liquidityParams.poolKey.currency0).toUint128().encode(
-                        _getFullCredit(liquidityParams.poolKey.currency1).toUint128()
-                    ),
+                    _getFullCredit(liquidityParams.poolKey.currency0)
+                        .toUint128()
+                        .encode(_getFullCredit(liquidityParams.poolKey.currency1).toUint128()),
                     liquidityParams.amount0Max.encode(liquidityParams.amount1Max),
                     liquidityParams.activeIdDesired,
                     liquidityParams.idSlippage,
@@ -293,7 +293,9 @@ contract BinPositionManager is
             //       catch active bin composition manipulation (eg. sandwich) which dilutes the shares minted.
             //       mintArray is aligned with liquidityConfigs, hence with deltaIds/minLiquidities.
             if (mintArray.liquidityMinted[i] < minLiquidities[i]) {
-                revert LiquiditySlippageCaught(uint24(mintArray.ids[i]), minLiquidities[i], mintArray.liquidityMinted[i]);
+                revert LiquiditySlippageCaught(
+                    uint24(mintArray.ids[i]), minLiquidities[i], mintArray.liquidityMinted[i]
+                );
             }
 
             uint256 tokenId = poolId.toTokenId(mintArray.ids[i]);

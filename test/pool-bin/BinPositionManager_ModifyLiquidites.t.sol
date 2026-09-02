@@ -1156,9 +1156,9 @@ contract BinPositionManager_ModifyLiquidityTest is BinLiquidityHelper, TokenFixt
 
         // expected share minted for the active bin, set min 1 wei above it
         bytes32 binReserves = PackedUint128Math.encode(0, 0); // binReserve=0 for new pool
-        uint256 expectedLiquidity =
-            calculateLiquidityMinted(binReserves, uint128(amountToSend), uint128(amountToSend), binIds[0], 10, 0)
-                - BinPool.MINIMUM_SHARE;
+        uint256 expectedLiquidity = calculateLiquidityMinted(
+            binReserves, uint128(amountToSend), uint128(amountToSend), binIds[0], 10, 0
+        ) - BinPool.MINIMUM_SHARE;
         uint256[] memory minLiquidities = new uint256[](1);
         minLiquidities[0] = expectedLiquidity + 1;
 
@@ -1273,9 +1273,7 @@ contract BinPositionManager_ModifyLiquidityTest is BinLiquidityHelper, TokenFixt
     /// @dev simulate an attacker swap that manipulates the active bin composition.
     ///      Kept small enough to stay within the active bin so activeId is unchanged.
     function _attackerSwap(PoolKey memory key, bool swapForY, uint128 amountIn) internal {
-        vault.lock(
-            abi.encodeCall(BinPositionManager_ModifyLiquidityTest.__attackerSwap, (key, swapForY, amountIn))
-        );
+        vault.lock(abi.encodeCall(BinPositionManager_ModifyLiquidityTest.__attackerSwap, (key, swapForY, amountIn)));
     }
 
     function __attackerSwap(PoolKey memory key, bool swapForY, uint128 amountIn) external {
